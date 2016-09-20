@@ -54,6 +54,8 @@
 #include <cmath>   // for abs()
 #include <cstdlib> // for abs()
 #include <limits>
+#include <functional> //std::function
+
 
 // Avoid conflicting declaration of min/max macros in windows headers
 #if !defined(NOMINMAX) && (defined(_WIN32) || defined(_WIN32_)  || defined(WIN32) || defined(_WIN64))
@@ -898,7 +900,7 @@ namespace nanoflann
 		 * \sa knnSearch, radiusSearch
 		 */
 		template <typename RESULTSET>
-		bool findNeighbors(RESULTSET& result, const ElementType* vec, const SearchParams& searchParams) const
+		bool findNeighbors(RESULTSET& result, const ElementType* vec, const SearchParams& searchParams, const std::function<bool (IndexType)> filter = nullptr) const
 		{
 			assert(vec);
             if (size() == 0)
@@ -910,7 +912,7 @@ namespace nanoflann
 			distance_vector_t dists; // fixed or variable-sized container (depending on DIM)
 			dists.assign((DIM>0 ? DIM : dim) ,0); // Fill it with zeros.
 			DistanceType distsq = computeInitialDistances(vec, dists);
-			searchLevel(result, vec, root_node, distsq, dists, epsError);  // "count_leaf" parameter removed since was neither used nor returned to the user.
+			searchLevel(result, vec, root_node, distsq, dists, epsError, filter);  // "count_leaf" parameter removed since was neither used nor returned to the user.
             return result.full();
 		}
 
@@ -920,11 +922,12 @@ namespace nanoflann
 		 *  \sa radiusSearch, findNeighbors
 		 * \note nChecks_IGNORED is ignored but kept for compatibility with the original FLANN interface.
 		 */
-		inline void knnSearch(const ElementType *query_point, const size_t num_closest, IndexType *out_indices, DistanceType *out_distances_sq, const int /* nChecks_IGNORED */ = 10) const
+		inline void knnSearch(const ElementType *query_point, const size_t num_closest, IndexType *out_indices,
+                DistanceType *out_distances_sq, const std::function<bool (IndexType)> t_filter = nullptr, const int /* nChecks_IGNORED */ = 10) const
 		{
 			nanoflann::KNNResultSet<DistanceType,IndexType> resultSet(num_closest);
 			resultSet.init(out_indices, out_distances_sq);
-			this->findNeighbors(resultSet, query_point, nanoflann::SearchParams());
+			this->findNeighbors(resultSet, query_point, nanoflann::SearchParams(), t_filter);
 		}
 
 		/**
@@ -1202,7 +1205,7 @@ namespace nanoflann
 		 */
 		template <class RESULTSET>
 		void searchLevel(RESULTSET& result_set, const ElementType* vec, const NodePtr node, DistanceType mindistsq,
-						 distance_vector_t& dists, const float epsError) const
+						 distance_vector_t& dists, const float epsError, const std::function<bool (IndexType)> filter = nullptr) const
 		{
 			/* If this is a leaf node, then do check and return. */
 			if ((node->child1 == NULL)&&(node->child2 == NULL)) {
@@ -1212,7 +1215,13 @@ namespace nanoflann
 					const IndexType index = vind[i];// reorder... : i;
 					DistanceType dist = distance(vec, index, (DIM>0 ? DIM : dim));
 					if (dist<worst_dist) {
-						result_set.addPoint(dist,vind[i]);
+                        if(filter != nullptr){
+                            if(filter(index)){
+                                result_set.addPoint(dist,vind[i]);
+                            }
+                        }else{
+                            result_set.addPoint(dist,vind[i]);
+                        }
 					}
 				}
 				return;
@@ -1239,13 +1248,13 @@ namespace nanoflann
 			}
 
 			/* Call recursively to search next level down. */
-			searchLevel(result_set, vec, bestChild, mindistsq, dists, epsError);
+			searchLevel(result_set, vec, bestChild, mindistsq, dists, epsError, filter);
 
 			DistanceType dst = dists[idx];
 			mindistsq = mindistsq + cut_dist - dst;
 			dists[idx] = cut_dist;
 			if (mindistsq*epsError<=result_set.worstDist()) {
-				searchLevel(result_set, vec, otherChild, mindistsq, dists, epsError);
+				searchLevel(result_set, vec, otherChild, mindistsq, dists, epsError, filter);
 			}
 			dists[idx] = dst;
 		}
