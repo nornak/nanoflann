@@ -136,11 +136,6 @@ namespace nanoflann
 		{
 			return dists[capacity-1];
 		}
-
-		inline DistanceType worstDist(const IndexType index) const
-		{
-            return dists[capacity -1];
-        }
 	};
 
 
@@ -176,7 +171,6 @@ namespace nanoflann
 		}
 
 		inline DistanceType worstDist() const { return radius; }
-		inline DistanceType worstDist(const IndexType& index) const { return radius; }
 
 		/** Clears the result set and adjusts the search radius. */
 		inline void set_radius_and_clear( const DistanceType r )
@@ -206,10 +200,11 @@ namespace nanoflann
 
 		const DatasetAdaptor &dataset; 
         
+        DistanceType maxRadius;
         ClassHelper classHelper;
 
-		inline RadiusResultSetDinamic(std::vector<std::pair<IndexType,DistanceType> >& indices_dists, DatasetAdaptor t_dataset, ClassHelper t_class) :
-            m_indices_dists(indices_dists), dataset(t_dataset), classHelper(t_class)
+		inline RadiusResultSetDinamic(std::vector<std::pair<IndexType,DistanceType> >& indices_dists, DatasetAdaptor t_dataset, DistanceType t_maxRadius, ClassHelper t_classHelper) :
+            m_indices_dists(indices_dists), dataset(t_dataset), maxRadius(t_maxRadius), classHelper(t_classHelper)
 		{
 			init();
 		}
@@ -226,23 +221,13 @@ namespace nanoflann
 		inline void addPoint(DistanceType dist, IndexType index)
 		{
             const DistanceType radius = dataset.kdtree_get_radius(classHelper, index);
-			if (dist<radius)
+			if (dist < radius)
 				m_indices_dists.push_back(std::make_pair(index,dist));
 		}
 
-		inline DistanceType worstDist(IndexType index) const {
-            return dataset.kdtree_get_radius(classHelper, index);
-        }
-
 		inline DistanceType worstDist() const {
 
-            DistanceType max = 0;
-            for(auto v: m_indices_dists){
-                if(v.second > max){
-                    max = v.second;
-                }
-            }
-            return max;
+            return maxRadius;
         }
 
 		/** Clears the result set and adjusts the search radius. */
@@ -250,11 +235,6 @@ namespace nanoflann
 		{
 			clear();
 		}
-
-
-        inline void setClassHelper(const ClassHelper t_class){
-            classHelper = t_class;
-        }
 
 		/**
 		 * Find the worst result (furtherest neighbor) without copying or sorting
@@ -844,7 +824,6 @@ namespace nanoflann
 		size_t m_size; //!< Number of current poins in the dataset
 		size_t m_size_at_index_build; //!< Number of points in the dataset when the index was built
 		int dim;  //!< Dimensionality of each data point
-        mutable bool radiusDinamic;
 
 
 		/*--------------------- Internal Data Structures --------------------------*/
@@ -1022,7 +1001,6 @@ namespace nanoflann
 		 */
 		size_t radiusSearch(const ElementType *query_point,const DistanceType &radius, std::vector<std::pair<IndexType,DistanceType> >& IndicesDists, const SearchParams& searchParams) const
 		{
-            radiusDinamic = false;
 			RadiusResultSet<DistanceType,IndexType> resultSet(radius,IndicesDists);
 			const size_t nFound = radiusSearchCustomCallback(query_point,resultSet,searchParams);
 			if (searchParams.sorted)
@@ -1031,11 +1009,17 @@ namespace nanoflann
 		}
 
 
+        /**
+         * Find all the neighbors with a dynamic radius
+         */
         template<class ClassHelper>
-		size_t radiusSearch(const ElementType *query_point, std::vector<std::pair<IndexType,DistanceType>>& IndicesDists, const SearchParams& searchParams, const ClassHelper t_class) const
+		size_t radiusSearchDynamic(const ElementType *query_point, 
+                std::vector<std::pair<IndexType,DistanceType>>& IndicesDists,
+                const SearchParams& searchParams,
+                const DistanceType maxRadius,
+                const ClassHelper classHelper) const
 		{
-            radiusDinamic = true;
-			RadiusResultSetDinamic<DistanceType, IndexType, DatasetAdaptor, ClassHelper> resultSet(IndicesDists, dataset, t_class);
+			RadiusResultSetDinamic<DistanceType, IndexType, DatasetAdaptor, ClassHelper> resultSet(IndicesDists, dataset, maxRadius, classHelper);
 			const size_t nFound = radiusSearchCustomCallback(query_point,resultSet,searchParams);
 			if (searchParams.sorted)
 				std::sort(IndicesDists.begin(),IndicesDists.end(), IndexDist_Sorter() );
@@ -1301,11 +1285,7 @@ namespace nanoflann
 			/* If this is a leaf node, then do check and return. */
 			if ((node->child1 == NULL)&&(node->child2 == NULL)) {
 				//count_leaf += (node->lr.right-node->lr.left);  // Removed since was neither used nor returned to the user.
-                if(radiusDinamic){
-                    leafNodeRadiusDinamic(result_set, node, vec, filter);
-                }else{
-                    leafNodeRadiusStatic(result_set, node, vec, filter);
-                }
+                leafNodeRadiusStatic(result_set, node, vec, filter);
 				return;
 			}
 
@@ -1335,15 +1315,8 @@ namespace nanoflann
 			DistanceType dst = dists[idx];
 			mindistsq = mindistsq + cut_dist - dst;
 			dists[idx] = cut_dist;
-            // TODO
-            if(radiusDinamic){
-                if (mindistsq*epsError<=result_set.worstDist(vind[0])) {
-                    searchLevel(result_set, vec, otherChild, mindistsq, dists, epsError, filter);
-                }
-            }else{
-                if (mindistsq*epsError<=result_set.worstDist()) {
-                    searchLevel(result_set, vec, otherChild, mindistsq, dists, epsError, filter);
-                }
+            if (mindistsq*epsError<=result_set.worstDist()) {
+                searchLevel(result_set, vec, otherChild, mindistsq, dists, epsError, filter);
             }
 			dists[idx] = dst;
 		}
@@ -1354,25 +1327,6 @@ namespace nanoflann
             DistanceType worst_dist = result_set.worstDist();
             for (IndexType i=node->node_type.lr.left; i<node->node_type.lr.right; ++i) {
                 const IndexType index = vind[i];// reorder... : i;
-                DistanceType dist = distance(vec, index, (DIM>0 ? DIM : dim));
-                if (dist<worst_dist) {
-                    if(filter != nullptr){
-                        if(filter(index)){
-                            result_set.addPoint(dist,vind[i]);
-                        }
-                    }else{
-                        result_set.addPoint(dist,vind[i]);
-                    }
-                }
-            }
-        }
-
-		template <class RESULTSET>
-        void leafNodeRadiusDinamic(RESULTSET& result_set, const NodePtr node, const ElementType* vec, const std::function<bool (IndexType)> filter = nullptr) const{
-
-            for (IndexType i=node->node_type.lr.left; i<node->node_type.lr.right; ++i) {
-                const IndexType index = vind[i];// reorder... : i;
-                DistanceType worst_dist = result_set.worstDist(index);
                 DistanceType dist = distance(vec, index, (DIM>0 ? DIM : dim));
                 if (dist<worst_dist) {
                     if(filter != nullptr){
