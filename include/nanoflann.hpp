@@ -221,8 +221,9 @@ namespace nanoflann
 		inline void addPoint(DistanceType dist, IndexType index)
 		{
             const DistanceType radius = dataset.kdtree_get_radius(classHelper, index);
+            const int key = dataset.getKey(index);
 			if (dist < radius)
-				m_indices_dists.push_back(std::make_pair(index,dist));
+				m_indices_dists.push_back(std::make_pair(key,dist));
 		}
 
 		inline DistanceType worstDist() const {
