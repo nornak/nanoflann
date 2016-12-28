@@ -55,6 +55,7 @@
 #include <cstdlib> // for abs()
 #include <limits>
 #include <functional> //std::function
+#include <iostream> //std::function
 
 
 // Avoid conflicting declaration of min/max macros in windows headers
@@ -203,7 +204,7 @@ namespace nanoflann
         DistanceType maxRadius;
         ClassHelper classHelper;
 
-		inline RadiusResultSetDinamic(std::vector<std::pair<IndexType,DistanceType> >& indices_dists, DatasetAdaptor t_dataset, DistanceType t_maxRadius, ClassHelper t_classHelper) :
+		inline RadiusResultSetDinamic(std::vector<std::pair<IndexType,DistanceType> >& indices_dists, const DatasetAdaptor& t_dataset, const DistanceType t_maxRadius, const ClassHelper t_classHelper) :
             m_indices_dists(indices_dists), dataset(t_dataset), maxRadius(t_maxRadius), classHelper(t_classHelper)
 		{
 			init();
