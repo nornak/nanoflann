@@ -200,11 +200,11 @@ namespace nanoflann
 		std::vector<std::pair<IndexType,DistanceType> >& m_indices_dists;
 
 		const DatasetAdaptor &dataset; 
-        const ClassHelper* const classHelper;
+        const ClassHelper classHelper;
         
         DistanceType maxRadius;
 
-		inline RadiusResultSetDinamic(std::vector<std::pair<IndexType,DistanceType> >& indices_dists, const DatasetAdaptor& t_dataset, const DistanceType t_maxRadius, const ClassHelper* const t_classHelper) :
+		inline RadiusResultSetDinamic(std::vector<std::pair<IndexType,DistanceType> >& indices_dists, const DatasetAdaptor& t_dataset, const DistanceType t_maxRadius, const ClassHelper& t_classHelper) :
             m_indices_dists(indices_dists), dataset(t_dataset), maxRadius(t_maxRadius), classHelper(t_classHelper)
 		{
 			init();
@@ -1018,7 +1018,7 @@ namespace nanoflann
                 std::vector<std::pair<IndexType,DistanceType>>& IndicesDists,
                 const SearchParams& searchParams,
                 const DistanceType maxRadius,
-                const ClassHelper* const classHelper) const
+                const ClassHelper& classHelper) const
 		{
 			RadiusResultSetDinamic<DistanceType, IndexType, DatasetAdaptor, ClassHelper> resultSet(IndicesDists, dataset, maxRadius, classHelper);
 			const size_t nFound = radiusSearchCustomCallback(query_point,resultSet,searchParams);
