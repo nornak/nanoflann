@@ -1101,8 +1101,8 @@ namespace nanoflann
 				}
 				for (size_t k=1; k<N; ++k) {
 					for (int i=0; i<(DIM>0 ? DIM : dim); ++i) {
-						if (dataset_get(k,i)<bbox[i].low) bbox[i].low = dataset_get(k,i);
-						if (dataset_get(k,i)>bbox[i].high) bbox[i].high = dataset_get(k,i);
+						if (dataset_get(k,i) < bbox[i].low) bbox[i].low = dataset_get(k,i);
+						if (dataset_get(k,i) > bbox[i].high) bbox[i].high = dataset_get(k,i);
 					}
 				}
 			}
@@ -1288,7 +1288,14 @@ namespace nanoflann
 			/* If this is a leaf node, then do check and return. */
 			if ((node->child1 == NULL)&&(node->child2 == NULL)) {
 				//count_leaf += (node->lr.right-node->lr.left);  // Removed since was neither used nor returned to the user.
-                leafNodeRadiusStatic(result_set, node, vec, filter);
+                DistanceType worst_dist = result_set.worstDist();
+				for (IndexType i=node->node_type.lr.left; i<node->node_type.lr.right; ++i) {
+					const IndexType index = vind[i];// reorder... : i;
+					DistanceType dist = distance(vec, index, (DIM>0 ? DIM : dim));
+					if (dist<worst_dist) {
+						result_set.addPoint(dist,vind[i]);
+					}
+				}
 				return;
 			}
 
@@ -1324,24 +1331,6 @@ namespace nanoflann
 			dists[idx] = dst;
 		}
 
-
-		template <class RESULTSET>
-        void leafNodeRadiusStatic(RESULTSET& result_set, const NodePtr node, const ElementType* vec, const std::function<bool (IndexType)> filter = nullptr) const{
-            DistanceType worst_dist = result_set.worstDist();
-            for (IndexType i=node->node_type.lr.left; i<node->node_type.lr.right; ++i) {
-                const IndexType index = vind[i];// reorder... : i;
-                DistanceType dist = distance(vec, index, (DIM>0 ? DIM : dim));
-                if (dist<worst_dist) {
-                    if(filter != nullptr){
-                        if(filter(index)){
-                            result_set.addPoint(dist,vind[i]);
-                        }
-                    }else{
-                        result_set.addPoint(dist,vind[i]);
-                    }
-                }
-            }
-        }
 
 
 	public:
