@@ -889,8 +889,9 @@ namespace nanoflann
 		 * @param params Basically, the maximum leaf node size
 		 */
 		KDTreeSingleIndexAdaptor(const int dimensionality, const DatasetAdaptor& inputData, const KDTreeSingleIndexAdaptorParams& params = KDTreeSingleIndexAdaptorParams() ) :
-			dataset(inputData), index_params(params), root_node(NULL), distance(inputData)
+			dataset(inputData), index_params(params), root_node(NULL), distance(inputData) , countNodes(0), countVisited(0)
 		{
+            countVisited = 0;
 			m_size = dataset.kdtree_get_point_count();
 			m_size_at_index_build = m_size;
 			dim = dimensionality;
@@ -958,7 +959,7 @@ namespace nanoflann
 		 * \sa knnSearch, radiusSearch
 		 */
 		template <typename RESULTSET>
-		bool findNeighbors(RESULTSET& result, const ElementType* vec, const SearchParams& searchParams, const std::function<bool (IndexType)> filter = nullptr) const
+		bool findNeighbors(RESULTSET& result, const ElementType* vec, const SearchParams& searchParams, const std::function<bool (IndexType)> filter = nullptr) 
 		{
 			assert(vec);
             if (size() == 0)
@@ -966,6 +967,8 @@ namespace nanoflann
 			if (!root_node)
                 throw std::runtime_error("[nanoflann] findNeighbors() called before building the index.");
 			float epsError = 1+searchParams.eps;
+
+            countVisited = 0;
 
 			distance_vector_t dists; // fixed or variable-sized container (depending on DIM)
 			dists.assign((DIM>0 ? DIM : dim) ,0); // Fill it with zeros.
@@ -982,7 +985,7 @@ namespace nanoflann
 		 * \return Number `N` of valid points in the result set. Only the first `N` entries in `out_indices` and `out_distances_sq` will be valid. 
 		 *         Return may be less than `num_closest` only if the number of elements in the tree is less than `num_closest`.
 		 */
-		size_t knnSearch(const ElementType *query_point, const size_t num_closest, IndexType *out_indices, DistanceType *out_distances_sq, const int /* nChecks_IGNORED */ = 10) const
+		size_t knnSearch(const ElementType *query_point, const size_t num_closest, IndexType *out_indices, DistanceType *out_distances_sq, const int /* nChecks_IGNORED */ = 10) 
 		{
 			nanoflann::KNNResultSet<DistanceType,IndexType> resultSet(num_closest);
 			resultSet.init(out_indices, out_distances_sq);
@@ -1002,7 +1005,7 @@ namespace nanoflann
 		 *  \sa knnSearch, findNeighbors, radiusSearchCustomCallback
 		 * \return The number of points within the given radius (i.e. indices.size() or dists.size() )
 		 */
-		size_t radiusSearch(const ElementType *query_point,const DistanceType &radius, std::vector<std::pair<IndexType,DistanceType> >& IndicesDists, const SearchParams& searchParams) const
+		size_t radiusSearch(const ElementType *query_point,const DistanceType &radius, std::vector<std::pair<IndexType,DistanceType> >& IndicesDists, const SearchParams& searchParams) 
 		{
 			RadiusResultSet<DistanceType,IndexType> resultSet(radius,IndicesDists);
 			const size_t nFound = radiusSearchCustomCallback(query_point,resultSet,searchParams);
@@ -1035,7 +1038,7 @@ namespace nanoflann
 		 * \sa radiusSearch
 		 */
 		template <class SEARCH_CALLBACK>
-		size_t radiusSearchCustomCallback(const ElementType *query_point,SEARCH_CALLBACK &resultSet, const SearchParams& searchParams = SearchParams() ) const
+		size_t radiusSearchCustomCallback(const ElementType *query_point,SEARCH_CALLBACK &resultSet, const SearchParams& searchParams = SearchParams() ) 
 		{
 			this->findNeighbors(resultSet, query_point, searchParams);
 			return resultSet.size();
@@ -1119,6 +1122,7 @@ namespace nanoflann
 		NodePtr divideTree(const IndexType left, const IndexType right, BoundingBox& bbox)
 		{
 			NodePtr node = pool.allocate<Node>(); // allocate memory
+            countNodes++;
 
 			/* If too few exemplars remain, then make this a leaf node. */
 			if ( (right-left) <= static_cast<IndexType>(m_leaf_max_size) ) {
@@ -1283,8 +1287,9 @@ namespace nanoflann
 		 */
 		template <class RESULTSET>
 		void searchLevel(RESULTSET& result_set, const ElementType* vec, const NodePtr node, DistanceType mindistsq,
-						 distance_vector_t& dists, const float epsError, const std::function<bool (IndexType)> filter = nullptr) const
+						 distance_vector_t& dists, const float epsError, const std::function<bool (IndexType)> filter = nullptr) 
 		{
+            countVisited++;
 			/* If this is a leaf node, then do check and return. */
 			if ((node->child1 == NULL)&&(node->child2 == NULL)) {
 				//count_leaf += (node->lr.right-node->lr.left);  // Removed since was neither used nor returned to the user.
@@ -1333,6 +1338,9 @@ namespace nanoflann
 
 
 
+        volatile int countNodes;
+        volatile int countVisited;
+
 	public:
 		/**  Stores the index in a binary file.
 		  *   IMPORTANT NOTE: The set of data points is NOT stored in the file, so when loading the index object it must be constructed associated to the same source of data points used while building it.
@@ -1361,6 +1369,14 @@ namespace nanoflann
 			load_value(stream, vind);
 			load_tree(stream, root_node);
 		}
+
+        int getCountNodes() const{
+            return countNodes;
+        }
+
+        int getLastNodesVisited() const{
+            return countVisited;
+        }
 
 	};   // class KDTree
 
@@ -1420,7 +1436,7 @@ namespace nanoflann
 		  *  The user can also call index->... methods as desired.
 		  * \note nChecks_IGNORED is ignored but kept for compatibility with the original FLANN interface.
 		  */
-		inline void query(const num_t *query_point, const size_t num_closest, IndexType *out_indices, num_t *out_distances_sq, const int /* nChecks_IGNORED */ = 10) const
+		inline void query(const num_t *query_point, const size_t num_closest, IndexType *out_indices, num_t *out_distances_sq, const int /* nChecks_IGNORED */ = 10) 
 		{
 			nanoflann::KNNResultSet<num_t,IndexType> resultSet(num_closest);
 			resultSet.init(out_indices, out_distances_sq);
