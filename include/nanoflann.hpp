@@ -1098,11 +1098,15 @@ namespace nanoflann
 			{
 				const size_t N = dataset.kdtree_get_point_count();
 				if (!N) throw std::runtime_error("[nanoflann] computeBoundingBox() called but no data points found.");
+                // llena para cada dimension con valores del primer elemento del
+                // arreglo de elemenos
 				for (int i=0; i<(DIM>0 ? DIM : dim); ++i) {
 					bbox[i].low =
 					bbox[i].high = dataset_get(0,i);
 				}
+                // se buscan los limites del la caja contenedora segun los puntos
 				for (size_t k=1; k<N; ++k) {
+                    // para cada dimension
 					for (int i=0; i<(DIM>0 ? DIM : dim); ++i) {
 						if (dataset_get(k,i) < bbox[i].low) bbox[i].low = dataset_get(k,i);
 						if (dataset_get(k,i) > bbox[i].high) bbox[i].high = dataset_get(k,i);
@@ -1171,6 +1175,9 @@ namespace nanoflann
 		}
 
 
+        // salida:
+        //  - min_elem
+        //  - max_elem
 		void computeMinMax(IndexType* ind, IndexType count, int element, ElementType& min_elem, ElementType& max_elem)
 		{
 			min_elem = dataset_get(ind[0],element);
@@ -1182,10 +1189,15 @@ namespace nanoflann
 			}
 		}
 
+        // salida:
+        //  - index
+        //  - cutfeat
+        //  - cutval
 		void middleSplit_(IndexType* ind, IndexType count, IndexType& index, int& cutfeat, DistanceType& cutval, const BoundingBox& bbox)
 		{
 			const DistanceType EPS=static_cast<DistanceType>(0.00001);
 			ElementType max_span = bbox[0].high-bbox[0].low;
+            // se busca la mayor distancia que hay para cada dimension
 			for (int i=1; i<(DIM>0 ? DIM : dim); ++i) {
 				ElementType span = bbox[i].high-bbox[i].low;
 				if (span>max_span) {
@@ -1194,8 +1206,11 @@ namespace nanoflann
 			}
 			ElementType max_spread = -1;
 			cutfeat = 0;
+
+            // se busa el valor de cutfeat
 			for (int i=0; i<(DIM>0 ? DIM : dim); ++i) {
 				ElementType span = bbox[i].high-bbox[i].low;
+                // solo para lo elementos que estan cercanos al max_span (?)
 				if (span>(1-EPS)*max_span) {
 					ElementType min_elem, max_elem;
 					computeMinMax(ind, count, i, min_elem, max_elem);
@@ -1216,6 +1231,7 @@ namespace nanoflann
 			else cutval = split_val;
 
 			IndexType lim1, lim2;
+            // funcion modifica: cutval, lim1, lim2
 			planeSplit(ind, count, cutfeat, cutval, lim1, lim2);
 
 			if (lim1>count/2) index = lim1;
@@ -1232,6 +1248,9 @@ namespace nanoflann
 		 *  dataset[ind[0..lim1-1]][cutfeat]<cutval
 		 *  dataset[ind[lim1..lim2-1]][cutfeat]==cutval
 		 *  dataset[ind[lim2..count]][cutfeat]>cutval
+         *  Salida:
+         *      - lim1
+         *      - lim2
 		 */
 		void planeSplit(IndexType* ind, const IndexType count, int cutfeat, DistanceType &cutval, IndexType& lim1, IndexType& lim2)
 		{
@@ -1239,6 +1258,7 @@ namespace nanoflann
 			IndexType left = 0;
 			IndexType right = count-1;
 			for (;; ) {
+                // se busca el elemento que cumpla valor < cutval
 				while (left<=right && dataset_get(ind[left],cutfeat)<cutval) ++left;
 				while (right && left<=right && dataset_get(ind[right],cutfeat)>=cutval) --right;
 				if (left>right || !right) break;  // "!right" was added to support unsigned Index types
