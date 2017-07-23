@@ -1150,6 +1150,8 @@ namespace nanoflann
 				IndexType idx;
 				int cutfeat;
 				DistanceType cutval;
+                // valores asignados: idx, cutfeat y cutval
+                // bbox no se modifica
 				middleSplit_(&vind[0]+left, right-left, idx, cutfeat, cutval, bbox);
 
 				node->node_type.sub.divfeat = cutfeat;
@@ -1204,10 +1206,11 @@ namespace nanoflann
 					max_span = span;
 				}
 			}
+            // este valor despues no se usa?
 			ElementType max_spread = -1;
 			cutfeat = 0;
 
-            // se busa el valor de cutfeat
+            // se busca el valor de cutfeat
 			for (int i=0; i<(DIM>0 ? DIM : dim); ++i) {
 				ElementType span = bbox[i].high-bbox[i].low;
                 // solo para lo elementos que estan cercanos al max_span (?)
@@ -1231,7 +1234,7 @@ namespace nanoflann
 			else cutval = split_val;
 
 			IndexType lim1, lim2;
-            // funcion modifica: cutval, lim1, lim2
+            // funcion modifica: lim1, lim2
 			planeSplit(ind, count, cutfeat, cutval, lim1, lim2);
 
 			if (lim1>count/2) index = lim1;
